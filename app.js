@@ -18,6 +18,52 @@ function isPicture(path) {
     .indexOf(p.extname(path).substring(1));
 }
 
+function upload(stream) {
+
+  var formData = {
+    upload: stream
+  };
+
+  var form = {
+    key: settings.key ? settings.key : undefined
+  }
+
+  request.post(settings.urlapi, {formData: formData, form: form}, function (err, res, body) {
+
+    if (err) {
+      notifier.notify({
+        'title': 'Error !',
+        'message': err
+      });
+
+      return console.error('upload failed:', err);
+    }
+
+    var response = JSON.parse(body);
+
+    if (response.status_code !== 200) {
+      return notifier.notify({
+        'title': 'Error while updating screenshot!',
+        'message': response.status_txt
+      });
+
+    }
+
+    var shortlink = response.data.image_short_url;
+
+    //copy to clipboard
+    copy.copy(shortlink, function() {
+      notifier.notify({
+        'title': 'Uploaded',
+        'message': shortlink,
+        'appIcon': __dirname + '/icones/up.png',
+        'contentImage': stream.path,
+        'open': shortlink
+      });
+    });
+  });
+}
+
 watcher.on('add', function(path) {
   if(!isPicture(path))
     return;
@@ -25,50 +71,13 @@ watcher.on('add', function(path) {
   fs.exists(path, function(exist) {
     if(!exist) 
       return;
+    
+    var stream = fs.createReadStream(path)
 
-    var formData = {
-      upload: fs.createReadStream(path)
-    };
+    stream.on('open', function() {
+     debug('Posting picture from path %s to url %s', path, settings.urlapi)
 
-    var form = {
-      key: settings.key ? settings.key : undefined
-    }
-
-    debug('Posting picture from path %s to url %s', path, settings.urlapi)
-
-    request.post(settings.urlapi, {formData: formData, form: form}, function (err, res, body) {
-
-      if (err) {
-        notifier.notify({
-          'title': 'Error !',
-          'message': err
-        });
-
-        return console.error('upload failed:', err);
-      }
-
-      var response = JSON.parse(body);
-
-      if (response.status_code !== 200) {
-        return notifier.notify({
-          'title': 'Error while updating screenshot!',
-          'message': response.status_txt
-        });
-
-      }
-
-      var shortlink = response.data.image_short_url;
-
-      //copy to clipboard
-      copy.copy(shortlink, function() {
-        notifier.notify({
-          'title': 'Uploaded',
-          'message': shortlink,
-          'appIcon': __dirname + '/icones/up.png',
-          'contentImage': path,
-          'open': shortlink
-        });
-      });
-    });
+     return upload(this)
+    })
   })
 })
